@@ -1,0 +1,238 @@
+---
+title: 'Reporte final: "Venta de televisores"'
+author: "Ariadna Jocelyn Guzmán Jiménez - A01749373"
+date: "`r Sys.Date()`"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+
+# Resumen
+
+Mediante el siguiente reporte, se pretende abordar la problemática de "Venta de televisores", de la cual, tenemos datos como las ventas en diferentes periodos de tiempo (Año y trimestre), y lo que se requiere es poder pronosticar que comportamiento tendrán sus ventas en los próximos años. Este proceso se realizará a través de series de tiempo no estacionarias, las cuales nos ayudaran a poder conocer la tendencia de los datos y a través de una regresión lineal, cumplir con el objetivo, verificando si el modelo utilizado es correcto y preciso para la implementacín de futuras predicciones.
+
+# Introducción
+
+Las series de tiempo, son secuencias de datos que se recopilan y observan en intervalos de tiempo regulares. Dentro de esta definición, contamos con dos tipos muy importantes:
+
+* *Series de tiempo estacionarias*: Son aquellas que no presentan tendencia, donde el proceso cuenta con una media y variabilidad constante.
+
+* *Series de tiempo no estacionarias*: Son series que presentan tendencia. Los cambios en la media determinan una tendencia a crecer o decrecer a largo plazo, por lo que la serie no oscila alrededor de un valor constante.
+
+Nuestro problema contiene datos como: Cantidad de años, cantidad de trimestres y ventas en cada uno de ellos. Esta información debe ser inicialmente analizada para poder conocer si cuentan con una tendencia o no, y de esta manera, poder conocer que tipo de serie de tiempo tenemos de utilizar. Una vez cumplido este procedimiento, se realizarán los análisis necesarios para poder llegar a solucionar la pregunta:
+
+
+**¿Cuál es el pronóstico del año 5?**
+
+# Análisis de los resultados
+
+## Datos
+
+
+```{r}
+year = 1:4
+trimester = 1:16
+sales = c(4.8, 4.1, 6, 6.5, 5.8, 5.2, 6.8, 7.4, 6, 5.6, 7.5, 7.8, 6.3, 5.9, 8, 8.4)
+```
+
+## Gráfico de dispersión
+
+```{r}
+plot(trimester, sales, type = "o", col = "red", main = "sales por trimestre")
+```
+
+## Análisis de tendencia y estacionalidad
+
+### Descomposición de la serie en sus 3 componentes e interpretación
+
+```{r}
+x = ts(sales, frequency =  4, start(c(2016, 1)))
+T = decompose(x, type = "m")
+plot(T, col = "blue")
+```
+
+En base a la gráfica anterior, podemos observar que en la tendencia tenemos una forma lineal que va aumentando de manera constante a través del tiempo, lo que nos indica que si hay existencia de tendencia y que por ende, tenemos una serie de tiempo no estacionaria.
+
+
+
+### Indices estacionales
+
+```{r}
+T$seasonal
+```
+
+
+## Modelo lineal de la tendencia
+
+### Regresión lineal de la tendencia
+
+```{r}
+sales_desestacionalizadas = (T$x)/ (T$seasonal)
+x3 = trimester
+y3 = sales_desestacionalizadas
+N3 = lm(y3~x3)
+N3
+plot(x3, y3, type = "l")
+abline(N3, col = "red")
+text(6, 7, " ventas = 5.1080 + 0.1474 t")
+```
+
+
+
+### Análisis de la pertinencia del modelo lineal
+
+#### Significancia de B1 y variabilidad explicada por el modelo
+
+```{r}
+summary(N3)
+```
+
+Con el resultado de nuestra regresión, podemos visualizar nuestros valores de $\beta_0$ y $\beta_1$, donde $\beta_1$ tiene un valor de 0.1474, lo que es significativamente diferente de 0 y nos muestra la dependencia de las variables, verificando que el modelo es apropiado.
+
+Por otro lado, en nuestro coeficiente de determinación nos encontramos con un valor de 0.92, el cuál, al estar cerca de el valor de 1, nos muestra un ajuste casi perfecto y verifica que el modelo es fiable para predicciones futuras.
+
+
+
+#### Verificación de supuestos
+
+##### Normalidad
+
+```{r}
+E=N3$residuals
+Y=N3$fitted.values
+
+qqnorm(E)
+qqline(E,col="red")
+
+hist(E,col="lightcyan",freq=FALSE,main="Histograma de Residuos",ylim=c(0,3), xlim = c(-0.5, 1),xlab="",ylab="Densidad")
+lines(density(E),col="red")
+curve(dnorm(x,mean=mean(E),sd=sd(E)), add=TRUE, col="blue",lwd=2)
+
+shapiro.test(E)
+
+```
+
+En la normalidad, se nos muestra que la probabilidad es ideal con respecto al modelo.
+
+##### Homocedasticidad y modelo apropiado
+
+
+```{r, fig.align = 'center'}
+plot(Y,E,ylab="Residuos",xlab="Valores estimados",pch=20,col="red")
+abline(h=0,col="red")
+text(Y[],E[],1:30,cex=0.8,pos=3,offset=0.2)
+```
+
+
+##### Independencia
+
+```{r}
+n=trimester
+plot(n,N3$residuals,type="l",xlab="Orden de las observaciones",ylab="Residuos")
+abline(h=0,col="red")
+```
+
+
+
+## CME y EPAM de la predicción con promedios móviles
+
+```{r}
+#Cálculo de pronósticos y errores
+t=1:16
+n = length(sales)
+p = c()
+e = c()
+ep = c()
+for(i in 1:n-2){
+  p[i+2]=((sales[i]+sales[i+1]+sales[i+2]+sales[i+3])/4)/T$seasonal[i]
+  e[i+2] =  sales[i+2] - p[i+2]
+  ep[i+2] = abs(e[i+2]/sales[i+2])*100
+}
+
+# Organizar la tabla
+Tp=data.frame(t,sales,p,e,ep)
+Tp
+
+# Calcular el CME y EPAM
+CME=mean(e^2,na.rm=TRUE)
+EPAM=mean(ep,na.rm=TRUE)
+sprintf("CME: %s", CME)
+sprintf("EPAM: %s", EPAM)
+
+
+
+```
+
+
+## Gráfico de valores de venta vs predicciones de tiempo
+
+```{r}
+plot(t, sales, type= "l", col = "blue")
+lines(t, p, col = "red", type="l")
+
+```
+
+## CME y EPAM de la predicción con regresión lineal
+
+
+```{r}
+p = c()
+e = c()
+ep = c()
+
+for (i in 1:(length(T$x)-2)){
+  p[i+2] = (5.1080 + 0.1474 * i)/T$seasonal[i]
+  e[i+2] =  sales[i+2] - p[i+2]
+  ep[i+2] = abs(e[i+2]/sales[i+2])*100
+}
+
+# Organizar la tabla
+Tp=data.frame(t,sales,p,e,ep)
+Tp
+
+# Calcular el CME y EPAM
+CME=mean(e^2,na.rm=TRUE)
+EPAM=mean(ep,na.rm=TRUE)
+sprintf("CME: %s", CME)
+sprintf("EPAM: %s", EPAM)
+
+```
+```{r}
+plot(t, sales, type= "l", col = "blue")
+lines(t, p, col = "red", type="l")
+
+```
+
+
+## Pronóstico para el siguente año
+
+```{r}
+f = function(x)(5.1080 + 0.1474 * x)
+# Indices estacionales
+a1 = T$seasonal[1]
+a2 =T$seasonal[2]
+a3 = T$seasonal[3]
+a4 = T$seasonal[4];
+f(17)*a1
+f(18)*a2
+f(19)*a3
+f(20)*a4
+
+```
+
+
+# Conclusión
+
+A través de los procedimientos anteriormente realizados y las visualizaciones gráficas obtenidas, podemos concluir que tanto con promedios móviles como con regresión lineal, se pudieron hacer predicciones adecuadas, siendo las dos casi precisas con los valores reales de las ventas, lo que nos hace ver que nuestros modelos son buenos para poder realizar estimaciones.
+
+
+# Anexos
+
+* https://github.com/A01749373/Portafolio-de-Analisis-A01749373
+
